@@ -1,6 +1,6 @@
 [package]
 name = "lzfse"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Felix Seele <fseele@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/citruz/lzfse-rs"

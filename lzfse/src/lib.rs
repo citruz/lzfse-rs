@@ -13,21 +13,21 @@
 //!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
 //!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
 //!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE];
-//! 
+//!
 //! // compression
 //! // in the worst case lzfse will fallback to return the input uncompressed
 //! // and add a magic header to indicate this. that requires 12 bytes (see lzfse_encode.c)
 //! let max_outlen = input.len() + 12;
 //! let mut compressed = vec![0; max_outlen];
-//! 
+//!
 //! let bytes_out = encode_buffer(&input[..], &mut compressed[..]).unwrap();
 //! assert!(bytes_out < input.len());
-//! 
+//!
 //! // decompression
-//! // need to allocate 1 byte more since lzfse returns input.len() if the buffer is too small 🤷‍♂️
+//! // need to allocate 1 byte more since lzfse returns input.len() if the buffer is too small
 //! let mut uncompressed = vec![0; input.len() + 1];
 //! let bytes_in = decode_buffer(&compressed[0..bytes_out], &mut uncompressed[..]).unwrap();
-//! 
+//!
 //! assert_eq!(bytes_in, input.len());
 //! assert_eq!(input[..], uncompressed[..bytes_in]);
 //! ````
