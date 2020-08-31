@@ -32,10 +32,9 @@
 //! assert_eq!(input[..], uncompressed[..bytes_in]);
 //! ````
 
-extern crate libc;
-extern crate lzfse_sys as ffi;
-
 use libc::size_t;
+use lzfse_sys as ffi;
+use std::ptr;
 
 /// This type represents all possible errors that can occur when decompressing data.
 #[derive(PartialEq, Debug)]
@@ -54,7 +53,7 @@ pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
             output.len() as size_t,
             input.as_ptr() as *const _,
             input.len() as size_t,
-            0 as *mut _,
+            ptr::null_mut(),
         ) as usize
     };
 
@@ -73,7 +72,7 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
             output.len() as size_t,
             input.as_ptr() as *const _,
             input.len() as size_t,
-            0 as *mut _,
+            ptr::null_mut(),
         ) as usize
     };
 
@@ -86,8 +85,6 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
 
 #[cfg(test)]
 mod tests {
-    extern crate rand;
-
     use super::*;
 
     #[test]
