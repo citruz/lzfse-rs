@@ -1,5 +1,3 @@
-extern crate libc;
-
 use libc::{c_char, c_void, size_t};
 
 extern "C" {

@@ -10,10 +10,11 @@ categories = ["compression", "api-bindings"]
 description = """
 Rust bindings for the LZFSE reference implementation.
 """
+edition = "2018"
 
 [dependencies]
 libc = "0.2"
 lzfse-sys = { version = "1.0.0", path = "../lzfse-sys" }
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.7"
