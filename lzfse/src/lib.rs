@@ -36,16 +36,20 @@ use libc::size_t;
 use lzfse_sys as ffi;
 use std::ptr;
 
-/// This type represents all possible errors that can occur when decompressing data.
+/// This type represents all possible errors that can occur when
+/// (de)compressing data.
 #[derive(PartialEq, Debug)]
 pub enum Error {
-    /// The buffer was not large enough for the decompressed data.
     BufferTooSmall,
-    /// Decompression failed because the input was invalid.
     CompressFailed,
 }
 
-/// Compress input into byte array
+/// Compress input into byte array.
+///
+/// # Errors
+///
+/// - Returns `CompressFailed` if compression failed for any reason, most
+///   likely because the output buffer is too small.
 pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_encode_buffer(
@@ -57,14 +61,20 @@ pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
         ) as usize
     };
 
-    if out_size == 0 {
-        Err(Error::CompressFailed)
-    } else {
-        Ok(out_size)
+    match out_size {
+        0 => Err(Error::CompressFailed),
+        n => Ok(n),
     }
 }
 
-/// Decompress input into byte array
+/// Decompress input into byte array,
+///
+/// # Errors
+///
+/// - Returns `BufferTooSmall` if the output buffer is too small to fit all
+///   decompressed data.
+/// - Returns `CompressFailed` if the decompression failed for any reason,
+///   most likely because of invalid input data.
 pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_decode_buffer(
@@ -76,10 +86,10 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
         ) as usize
     };
 
-    if out_size == output.len() {
-        Err(Error::BufferTooSmall)
-    } else {
-        Ok(out_size)
+    match out_size {
+        0 => Err(Error::CompressFailed),
+        n if n == output.len() => Err(Error::BufferTooSmall),
+        n => Ok(n),
     }
 }
 
@@ -122,6 +132,16 @@ mod tests {
         let result = decode_buffer(&compressed[0..bytes_out], &mut uncompressed[..]);
 
         assert_eq!(result, Err(Error::BufferTooSmall));
+    }
+
+    #[test]
+    fn decode_invalid_data() {
+        let input = [0xC0, 0xFF, 0xEE, 0xBA, 0xBE];
+
+        let mut uncompressed = vec![0; 10];
+        let result = decode_buffer(&input, &mut uncompressed);
+
+        assert_eq!(result, Err(Error::CompressFailed));
     }
 
     #[test]
