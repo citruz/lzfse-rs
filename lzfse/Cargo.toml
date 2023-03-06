@@ -1,6 +1,6 @@
 [package]
 name = "lzfse"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Felix Seele <fseele@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/citruz/lzfse-rs"
@@ -13,7 +13,7 @@ Rust bindings for the LZFSE reference implementation.
 
 [dependencies]
 libc = "0.2"
-lzfse-sys = { version = "1.0.0", path = "../lzfse-sys" }
+lzfse-sys = { version = "2.0.0", path = "../lzfse-sys" }
 
 [dev-dependencies]
 rand = "0.7.3"

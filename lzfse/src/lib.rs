@@ -1,6 +1,6 @@
 //! Rust bindings for the LZFSE reference implementation
 //!
-//! https://github.com/lzfse/lzfse
+//! <https://github.com/lzfse/lzfse>
 //!
 //! # Example
 //!
@@ -35,7 +35,9 @@
 extern crate libc;
 extern crate lzfse_sys as ffi;
 
-use libc::size_t;
+use ffi::{lzfse_decode_scratch_size, lzfse_encode_scratch_size};
+use std::ffi::c_void;
+use std::ptr;
 
 /// This type represents all possible errors that can occur when decompressing data.
 #[derive(PartialEq, Debug)]
@@ -50,12 +52,12 @@ pub enum Error {
 pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_encode_buffer(
-            output.as_ptr() as *mut _,
-            output.len() as size_t,
-            input.as_ptr() as *const _,
-            input.len() as size_t,
-            0 as *mut _,
-        ) as usize
+            output.as_mut_ptr(),
+            output.len(),
+            input.as_ptr(),
+            input.len(),
+            ptr::null_mut(),
+        )
     };
 
     if out_size == 0 {
@@ -69,12 +71,90 @@ pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
 pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_decode_buffer(
-            output.as_ptr() as *mut _,
-            output.len() as size_t,
-            input.as_ptr() as *const _,
-            input.len() as size_t,
-            0 as *mut _,
-        ) as usize
+            output.as_mut_ptr(),
+            output.len(),
+            input.as_ptr(),
+            input.len(),
+            ptr::null_mut(),
+        )
+    };
+
+    if out_size == output.len() {
+        Err(Error::BufferTooSmall)
+    } else {
+        Ok(out_size)
+    }
+}
+
+pub struct EncodeScratch {
+    buf: Box<[u8]>,
+}
+
+impl EncodeScratch {
+    pub fn new() -> Self {
+        let size = unsafe { lzfse_encode_scratch_size() };
+        Self {
+            buf: vec![0; size].into_boxed_slice(),
+        }
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut c_void {
+        self.buf.as_mut_ptr().cast()
+    }
+}
+
+pub struct DecodeScratch {
+    buf: Box<[u8]>,
+}
+
+impl DecodeScratch {
+    pub fn new() -> Self {
+        let size = unsafe { lzfse_decode_scratch_size() };
+        Self {
+            buf: vec![0; size].into_boxed_slice(),
+        }
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut c_void {
+        self.buf.as_mut_ptr().cast()
+    }
+}
+
+pub fn encode_buffer_scratch(
+    input: &[u8],
+    output: &mut [u8],
+    scratch: &mut EncodeScratch,
+) -> Result<usize, Error> {
+    let out_size = unsafe {
+        ffi::lzfse_encode_buffer(
+            output.as_mut_ptr(),
+            output.len(),
+            input.as_ptr(),
+            input.len(),
+            scratch.as_mut_ptr(),
+        )
+    };
+
+    if out_size == 0 {
+        Err(Error::CompressFailed)
+    } else {
+        Ok(out_size)
+    }
+}
+
+pub fn decode_buffer_scratch(
+    input: &[u8],
+    output: &mut [u8],
+    scratch: &mut DecodeScratch,
+) -> Result<usize, Error> {
+    let out_size = unsafe {
+        ffi::lzfse_decode_buffer(
+            output.as_mut_ptr(),
+            output.len(),
+            input.as_ptr(),
+            input.len(),
+            scratch.as_mut_ptr(),
+        )
     };
 
     if out_size == output.len() {

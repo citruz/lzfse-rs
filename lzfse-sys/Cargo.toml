@@ -1,6 +1,6 @@
 [package]
 name = "lzfse-sys"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Felix Seele <fseele@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/citruz/lzfse-rs"
@@ -16,9 +16,6 @@ build = "build.rs"
 [lib]
 name = "lzfse_sys"
 path = "lib.rs"
-
-[dependencies]
-libc = "0.2"
 
 [build-dependencies]
 cc = "1.0"
