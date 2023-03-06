@@ -34,7 +34,6 @@
 
 extern crate lzfse_sys as ffi;
 
-use ffi::{lzfse_decode_scratch_size, lzfse_encode_scratch_size};
 use std::ffi::c_void;
 use std::ptr;
 
@@ -91,7 +90,7 @@ pub struct EncodeScratch {
 
 impl EncodeScratch {
     pub fn new() -> Self {
-        let size = unsafe { lzfse_encode_scratch_size() };
+        let size = unsafe { ffi::lzfse_encode_scratch_size() };
         Self {
             buf: vec![0; size].into_boxed_slice(),
         }
@@ -108,7 +107,7 @@ pub struct DecodeScratch {
 
 impl DecodeScratch {
     pub fn new() -> Self {
-        let size = unsafe { lzfse_decode_scratch_size() };
+        let size = unsafe { ffi::lzfse_decode_scratch_size() };
         Self {
             buf: vec![0; size].into_boxed_slice(),
         }
@@ -214,6 +213,70 @@ mod tests {
 
         // this is not compressible
         let result = encode_buffer(&input[..], &mut compressed[..]);
+        assert_eq!(result, Err(Error::CompressFailed));
+    }
+
+    #[test]
+    fn round_trip_scratch() {
+        let input: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+        // lzfse will fallback to return the input uncompressed and add a magic header to indicate this
+        // this requires 12 byte (see lzfse_encode.c)
+        let max_outlen = input.len() + 12;
+        let mut compressed = vec![0; max_outlen];
+
+        let mut scratch_encode = EncodeScratch::new();
+        let bytes_out =
+            encode_buffer_scratch(&input[..], &mut compressed[..], &mut scratch_encode).unwrap();
+        assert_ne!(bytes_out, 0);
+
+        let mut scratch_decode = DecodeScratch::new();
+        // need to allocate 1 byte more since lzfse returns input.len() if the buffer is too small
+        let mut uncompressed = vec![0; input.len() + 1];
+        let bytes_in = decode_buffer_scratch(
+            &compressed[0..bytes_out],
+            &mut uncompressed[..],
+            &mut scratch_decode,
+        )
+        .unwrap();
+
+        assert_eq!(bytes_in, input.len());
+        assert_eq!(input[..], uncompressed[..bytes_in]);
+    }
+
+    #[test]
+    fn decode_buffer_to_small_scratch() {
+        let input: Vec<u8> = (0..1024).map(|_| rand::random::<u8>()).collect();
+        // lzfse will fallback to return the input uncompressed and add a magic header to indicate this
+        // this requires 12 byte (see lzfse_encode.c)
+        let max_outlen = input.len() + 12;
+        let mut compressed = vec![0; max_outlen];
+
+        let mut encode_scratch = EncodeScratch::new();
+        let bytes_out =
+            encode_buffer_scratch(&input[..], &mut compressed[..], &mut encode_scratch).unwrap();
+        assert_ne!(bytes_out, 0);
+
+        // this is one byte too small
+        let mut uncompressed = vec![0; input.len()];
+        let mut decode_scratch = DecodeScratch::new();
+        let result = decode_buffer_scratch(
+            &compressed[0..bytes_out],
+            &mut uncompressed[..],
+            &mut decode_scratch,
+        );
+
+        assert_eq!(result, Err(Error::BufferTooSmall));
+    }
+
+    #[test]
+    fn encode_buffer_to_small_scratch() {
+        let input = [0xC0, 0xFF, 0xEE, 0xBA, 0xBE];
+        let max_outlen = input.len();
+        let mut compressed = vec![0; max_outlen];
+
+        let mut scratch = EncodeScratch::new();
+        // this is not compressible
+        let result = encode_buffer_scratch(&input[..], &mut compressed[..], &mut scratch);
         assert_eq!(result, Err(Error::CompressFailed));
     }
 }
