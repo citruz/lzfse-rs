@@ -32,7 +32,6 @@
 //! assert_eq!(input[..], uncompressed[..bytes_in]);
 //! ````
 
-extern crate libc;
 extern crate lzfse_sys as ffi;
 
 use ffi::{lzfse_decode_scratch_size, lzfse_encode_scratch_size};
