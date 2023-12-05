@@ -54,7 +54,7 @@ pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
             output.len() as size_t,
             input.as_ptr() as *const _,
             input.len() as size_t,
-            0 as *mut _,
+            std::ptr::null_mut(),
         ) as usize
     };
 
@@ -73,7 +73,7 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
             output.len() as size_t,
             input.as_ptr() as *const _,
             input.len() as size_t,
-            0 as *mut _,
+            std::ptr::null_mut(),
         ) as usize
     };
 
