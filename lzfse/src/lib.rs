@@ -50,7 +50,7 @@ pub enum Error {
 pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_encode_buffer(
-            output.as_ptr() as *mut _,
+            output.as_mut_ptr() as *mut _,
             output.len() as size_t,
             input.as_ptr() as *const _,
             input.len() as size_t,
@@ -69,7 +69,7 @@ pub fn encode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
 pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_decode_buffer(
-            output.as_ptr() as *mut _,
+            output.as_mut_ptr() as *mut _,
             output.len() as size_t,
             input.as_ptr() as *const _,
             input.len() as size_t,
