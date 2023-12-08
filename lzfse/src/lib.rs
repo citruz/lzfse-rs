@@ -35,6 +35,7 @@
 extern crate lzfse_sys as ffi;
 
 use std::ffi::c_void;
+use std::mem::MaybeUninit;
 use std::ptr;
 
 /// This type represents all possible errors that can occur when decompressing data.
@@ -85,14 +86,25 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
 }
 
 pub struct EncodeScratch {
-    buf: Box<[u8]>,
+    buf: Box<[MaybeUninit<u8>]>,
+}
+
+fn uninit_scratch(size: usize) -> Box<[MaybeUninit<u8>]> {
+    // Unfortunately, vec![MaybeUninit::uninit(); size] does not optimize well
+    let mut buf = Vec::with_capacity(size);
+    // SAFETY: We just allocated this vector with the correct capacity
+    //         MaybeUninit is safe to be uninitialized
+    unsafe {
+        buf.set_len(size);
+    }
+    buf.into_boxed_slice()
 }
 
 impl EncodeScratch {
     pub fn new() -> Self {
         let size = unsafe { ffi::lzfse_encode_scratch_size() };
         Self {
-            buf: vec![0; size].into_boxed_slice(),
+            buf: uninit_scratch(size),
         }
     }
 
@@ -102,14 +114,14 @@ impl EncodeScratch {
 }
 
 pub struct DecodeScratch {
-    buf: Box<[u8]>,
+    buf: Box<[MaybeUninit<u8>]>,
 }
 
 impl DecodeScratch {
     pub fn new() -> Self {
         let size = unsafe { ffi::lzfse_decode_scratch_size() };
         Self {
-            buf: vec![0; size].into_boxed_slice(),
+            buf: uninit_scratch(size),
         }
     }
 
