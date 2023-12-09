@@ -6,7 +6,7 @@ license = "MIT"
 repository = "https://github.com/citruz/lzfse-rs"
 readme = "README.md"
 keywords = ["lzfse", "compression"]
-categories = ["compression", "api-bindings"]
+categories = ["compression", "api-bindings", "no-std"]
 description = """
 Crate to build the LZFSE reference implementation for lzfse-rs.
 """
