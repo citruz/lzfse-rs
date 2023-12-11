@@ -18,7 +18,7 @@ fn main() {
         .file("lzfse/src/lzvn_decode_base.c")
         .file("lzfse/src/lzfse_fse.c")
         .out_dir(dst.join("lib"))
-        .compile("libbz2.a");
+        .compile("lzfse");
 
     let src = env::current_dir().unwrap().join("lzfse").join("src");
     let include = dst.join("include");
