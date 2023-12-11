@@ -35,8 +35,7 @@
 extern crate lzfse_sys as ffi;
 
 use std::ffi::c_void;
-use std::mem::MaybeUninit;
-use std::ptr;
+use std::{alloc, mem, ptr};
 
 /// This type represents all possible errors that can occur when decompressing data.
 #[derive(PartialEq, Debug)]
@@ -85,48 +84,84 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     }
 }
 
-pub struct EncodeScratch {
-    buf: Box<[MaybeUninit<u8>]>,
+fn scratch_layout(size: usize) -> alloc::Layout {
+    debug_assert_ne!(size, 0);
+    let array_layout = alloc::Layout::array::<u8>(size).expect("scratch size fits in an isize");
+    // lzfse does not document the alignment requirement of the scratch buffer.
+    // It appears to require alignment to the size of a pointer, but we'll be safe and overalign it
+    // to 16 bytes
+    array_layout
+        .align_to(mem::align_of::<*mut u8>().max(16))
+        .unwrap()
 }
 
-fn uninit_scratch(size: usize) -> Box<[MaybeUninit<u8>]> {
-    // Unfortunately, vec![MaybeUninit::uninit(); size] does not optimize well
-    let mut buf = Vec::with_capacity(size);
-    // SAFETY: We just allocated this vector with the correct capacity
-    //         MaybeUninit is safe to be uninitialized
-    unsafe {
-        buf.set_len(size);
+pub struct EncodeScratch {
+    buf: *mut u8,
+}
+
+impl Drop for EncodeScratch {
+    fn drop(&mut self) {
+        let layout = Self::layout();
+        unsafe {
+            // SAFETY:
+            //  - self.buf was allocated with the same layout
+            //    - the scratch size function _must_ return the same value every time, and does
+            //  - this type owns the allocation, and the pointer will never be used again
+            alloc::dealloc(self.buf, layout);
+        }
     }
-    buf.into_boxed_slice()
 }
 
 impl EncodeScratch {
     pub fn new() -> Self {
-        let size = unsafe { ffi::lzfse_encode_scratch_size() };
+        let layout = Self::layout();
         Self {
-            buf: uninit_scratch(size),
+            buf: unsafe { alloc::alloc(layout) },
         }
     }
 
+    fn layout() -> alloc::Layout {
+        let size = unsafe { ffi::lzfse_encode_scratch_size() };
+        scratch_layout(size)
+    }
+
     fn as_mut_ptr(&mut self) -> *mut c_void {
-        self.buf.as_mut_ptr().cast()
+        self.buf.cast()
     }
 }
 
 pub struct DecodeScratch {
-    buf: Box<[MaybeUninit<u8>]>,
+    buf: *mut u8,
+}
+
+impl Drop for DecodeScratch {
+    fn drop(&mut self) {
+        let layout = Self::layout();
+        unsafe {
+            // SAFETY:
+            //  - self.buf was allocated with the same layout
+            //    - the scratch size function _must_ return the same value every time, and does
+            //  - this type owns the allocation, and the pointer will never be used again
+            alloc::dealloc(self.buf, layout);
+        }
+    }
 }
 
 impl DecodeScratch {
     pub fn new() -> Self {
-        let size = unsafe { ffi::lzfse_decode_scratch_size() };
+        let layout = Self::layout();
         Self {
-            buf: uninit_scratch(size),
+            buf: unsafe { alloc::alloc(layout) },
         }
     }
 
+    fn layout() -> alloc::Layout {
+        let size = unsafe { ffi::lzfse_decode_scratch_size() };
+        scratch_layout(size)
+    }
+
     fn as_mut_ptr(&mut self) -> *mut c_void {
-        self.buf.as_mut_ptr().cast()
+        self.buf.cast()
     }
 }
 
