@@ -35,7 +35,8 @@
 extern crate lzfse_sys as ffi;
 
 use std::ffi::c_void;
-use std::{alloc, mem, ptr};
+use std::sync::atomic::AtomicUsize;
+use std::{alloc, cmp, mem, ptr};
 
 /// This type represents all possible errors that can occur when decompressing data.
 #[derive(PartialEq, Debug)]
@@ -84,35 +85,21 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
     }
 }
 
-fn scratch_layout(size: usize) -> alloc::Layout {
-    debug_assert_ne!(size, 0);
-    let array_layout = alloc::Layout::array::<u8>(size).expect("scratch size fits in an isize");
-    // lzfse does not document the alignment requirement of the scratch buffer.
-    // It appears to require alignment to the size of a pointer, but we'll be safe and overalign it
-    // to 16 bytes
-    array_layout
-        .align_to(mem::align_of::<*mut u8>().max(16))
-        .unwrap()
-}
-
-pub struct EncodeScratch {
+pub struct Scratch {
     buf: *mut u8,
 }
 
-impl Drop for EncodeScratch {
+impl Drop for Scratch {
     fn drop(&mut self) {
         let layout = Self::layout();
+        // SAFETY: this type owns the allocation, and the pointer will never be used again
         unsafe {
-            // SAFETY:
-            //  - self.buf was allocated with the same layout
-            //    - the scratch size function _must_ return the same value every time, and does
-            //  - this type owns the allocation, and the pointer will never be used again
             alloc::dealloc(self.buf, layout);
         }
     }
 }
 
-impl EncodeScratch {
+impl Scratch {
     pub fn new() -> Self {
         let layout = Self::layout();
         Self {
@@ -120,55 +107,47 @@ impl EncodeScratch {
         }
     }
 
-    fn layout() -> alloc::Layout {
-        let size = unsafe { ffi::lzfse_encode_scratch_size() };
-        scratch_layout(size)
-    }
-
     fn as_mut_ptr(&mut self) -> *mut c_void {
         self.buf.cast()
     }
-}
 
-pub struct DecodeScratch {
-    buf: *mut u8,
-}
+    fn size() -> usize {
+        // We could use a Once here, but we assume calling the scratch size functions is consistent and
+        // cheap enough that we don't care if multiple threads try to initialize the value at the same
+        // time.
+        static SCRATCH_SIZE: AtomicUsize = AtomicUsize::new(0);
 
-impl Drop for DecodeScratch {
-    fn drop(&mut self) {
-        let layout = Self::layout();
-        unsafe {
-            // SAFETY:
-            //  - self.buf was allocated with the same layout
-            //    - the scratch size function _must_ return the same value every time, and does
-            //  - this type owns the allocation, and the pointer will never be used again
-            alloc::dealloc(self.buf, layout);
+        let size = SCRATCH_SIZE.load(std::sync::atomic::Ordering::Relaxed);
+        if size != 0 {
+            return size;
         }
-    }
-}
 
-impl DecodeScratch {
-    pub fn new() -> Self {
-        let layout = Self::layout();
-        Self {
-            buf: unsafe { alloc::alloc(layout) },
-        }
+        // SAFETY: lzfse_encode_scratch_size and lzfse_decode_scratch_size are always safe to call
+        let size = unsafe {
+            cmp::max(
+                ffi::lzfse_encode_scratch_size(),
+                ffi::lzfse_decode_scratch_size(),
+            )
+        };
+        SCRATCH_SIZE.store(size, std::sync::atomic::Ordering::Relaxed);
+        debug_assert_ne!(size, 0);
+        size
     }
 
     fn layout() -> alloc::Layout {
-        let size = unsafe { ffi::lzfse_decode_scratch_size() };
-        scratch_layout(size)
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut c_void {
-        self.buf.cast()
+        let size = Self::size();
+        // lzfse does not document the alignment requirement of the scratch buffer.
+        // It appears to require alignment to the size of a pointer (the buffer is cast to a pointer to
+        // a struct which contains a pointer as its largest aligned member), but we'll be safe and
+        // overalign it to at least 16 bytes
+        alloc::Layout::from_size_align(size, cmp::max(mem::align_of::<*mut u8>(), 16)).unwrap()
     }
 }
 
 pub fn encode_buffer_scratch(
     input: &[u8],
     output: &mut [u8],
-    scratch: &mut EncodeScratch,
+    scratch: &mut Scratch,
 ) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_encode_buffer(
@@ -190,7 +169,7 @@ pub fn encode_buffer_scratch(
 pub fn decode_buffer_scratch(
     input: &[u8],
     output: &mut [u8],
-    scratch: &mut DecodeScratch,
+    scratch: &mut Scratch,
 ) -> Result<usize, Error> {
     let out_size = unsafe {
         ffi::lzfse_decode_buffer(
@@ -271,18 +250,17 @@ mod tests {
         let max_outlen = input.len() + 12;
         let mut compressed = vec![0; max_outlen];
 
-        let mut scratch_encode = EncodeScratch::new();
+        let mut scratch = Scratch::new();
         let bytes_out =
-            encode_buffer_scratch(&input[..], &mut compressed[..], &mut scratch_encode).unwrap();
+            encode_buffer_scratch(&input[..], &mut compressed[..], &mut scratch).unwrap();
         assert_ne!(bytes_out, 0);
 
-        let mut scratch_decode = DecodeScratch::new();
         // need to allocate 1 byte more since lzfse returns input.len() if the buffer is too small
         let mut uncompressed = vec![0; input.len() + 1];
         let bytes_in = decode_buffer_scratch(
             &compressed[0..bytes_out],
             &mut uncompressed[..],
-            &mut scratch_decode,
+            &mut scratch,
         )
         .unwrap();
 
@@ -298,18 +276,17 @@ mod tests {
         let max_outlen = input.len() + 12;
         let mut compressed = vec![0; max_outlen];
 
-        let mut encode_scratch = EncodeScratch::new();
+        let mut scratch = Scratch::new();
         let bytes_out =
-            encode_buffer_scratch(&input[..], &mut compressed[..], &mut encode_scratch).unwrap();
+            encode_buffer_scratch(&input[..], &mut compressed[..], &mut scratch).unwrap();
         assert_ne!(bytes_out, 0);
 
         // this is one byte too small
         let mut uncompressed = vec![0; input.len()];
-        let mut decode_scratch = DecodeScratch::new();
         let result = decode_buffer_scratch(
             &compressed[0..bytes_out],
             &mut uncompressed[..],
-            &mut decode_scratch,
+            &mut scratch,
         );
 
         assert_eq!(result, Err(Error::BufferTooSmall));
@@ -321,7 +298,7 @@ mod tests {
         let max_outlen = input.len();
         let mut compressed = vec![0; max_outlen];
 
-        let mut scratch = EncodeScratch::new();
+        let mut scratch = Scratch::new();
         // this is not compressible
         let result = encode_buffer_scratch(&input[..], &mut compressed[..], &mut scratch);
         assert_eq!(result, Err(Error::CompressFailed));
