@@ -35,6 +35,7 @@
 extern crate lzfse_sys as ffi;
 
 use std::ffi::c_void;
+use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 use std::{alloc, cmp, mem, ptr};
 
@@ -86,15 +87,18 @@ pub fn decode_buffer(input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
 }
 
 pub struct Scratch {
-    buf: *mut u8,
+    buf: NonNull<u8>,
 }
+
+unsafe impl Send for Scratch {}
+unsafe impl Sync for Scratch {}
 
 impl Drop for Scratch {
     fn drop(&mut self) {
         let layout = Self::layout();
         // SAFETY: this type owns the allocation, and the pointer will never be used again
         unsafe {
-            alloc::dealloc(self.buf, layout);
+            alloc::dealloc(self.buf.as_ptr(), layout);
         }
     }
 }
@@ -102,13 +106,13 @@ impl Drop for Scratch {
 impl Scratch {
     pub fn new() -> Self {
         let layout = Self::layout();
-        Self {
-            buf: unsafe { alloc::alloc(layout) },
-        }
+        let buf = unsafe { alloc::alloc(layout) };
+        let buf = NonNull::new(buf).unwrap_or_else(|| alloc::handle_alloc_error(layout));
+        Self { buf }
     }
 
     fn as_mut_ptr(&mut self) -> *mut c_void {
-        self.buf.cast()
+        self.buf.as_ptr().cast()
     }
 
     fn size() -> usize {

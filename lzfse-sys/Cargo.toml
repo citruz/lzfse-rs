@@ -12,6 +12,7 @@ Crate to build the LZFSE reference implementation for lzfse-rs.
 """
 links = "lzfse"
 build = "build.rs"
+edition = "2015"
 
 [lib]
 name = "lzfse_sys"
