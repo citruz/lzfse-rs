@@ -31,6 +31,35 @@
 //! assert_eq!(bytes_in, input.len());
 //! assert_eq!(input[..], uncompressed[..bytes_in]);
 //! ````
+//!
+//! # Scratch Buffer Example
+//!
+//! The `encode_buffer_scratch` and `decode_buffer_scratch` functions allow for encoding and decoding
+//! using a scratch buffer to avoid allocations by the underlying library. This makes it possible to
+//! use the Rust crate with `no_std` and a custom allocator.
+//!
+//! ```
+//! use lzfse::{encode_buffer_scratch, decode_buffer_scratch, Scratch};
+//!
+//! let input: &[u8] = &[0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
+//!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
+//!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
+//!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
+//!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE,
+//!                      0xF, 0xE, 0xE, 0xD, 0xF, 0xA, 0xC, 0xE];
+//!
+//! let mut compressed = vec![0; input.len() + 12];
+//! let mut scratch = Scratch::new();
+//!
+//! let bytes_out = encode_buffer_scratch(&input, &mut compressed, &mut scratch).unwrap();
+//! assert!(bytes_out < input.len());
+//!
+//! let mut uncompressed = vec![0; input.len() + 1];
+//! let bytes_in = decode_buffer_scratch(&compressed[0..bytes_out], &mut uncompressed, &mut scratch).unwrap();
+//!
+//! assert_eq!(bytes_in, input.len());
+//! assert_eq!(input[..], uncompressed[..bytes_in]);
+//! ```
 
 extern crate lzfse_sys as ffi;
 
@@ -148,6 +177,7 @@ impl Scratch {
     }
 }
 
+/// Compress input into byte array using a scratch buffer
 pub fn encode_buffer_scratch(
     input: &[u8],
     output: &mut [u8],
@@ -170,6 +200,7 @@ pub fn encode_buffer_scratch(
     }
 }
 
+/// Decompress input into byte array using a scratch buffer
 pub fn decode_buffer_scratch(
     input: &[u8],
     output: &mut [u8],
