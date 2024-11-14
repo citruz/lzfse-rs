@@ -11,5 +11,5 @@ Rust bindings for the LZFSE reference implementation at https://github.com/lzfse
 ```toml
 # Cargo.toml
 [dependencies]
-lzfse = "0.1.0"
+lzfse = "0.2.0"
 ```
