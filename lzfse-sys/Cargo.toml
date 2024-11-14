@@ -1,24 +1,22 @@
 [package]
 name = "lzfse-sys"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Felix Seele <fseele@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/citruz/lzfse-rs"
 readme = "README.md"
 keywords = ["lzfse", "compression"]
-categories = ["compression", "api-bindings"]
+categories = ["compression", "api-bindings", "no-std"]
 description = """
 Crate to build the LZFSE reference implementation for lzfse-rs.
 """
 links = "lzfse"
 build = "build.rs"
+edition = "2015"
 
 [lib]
 name = "lzfse_sys"
 path = "lib.rs"
-
-[dependencies]
-libc = "0.2"
 
 [build-dependencies]
 cc = "1.0"
